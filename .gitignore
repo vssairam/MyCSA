@@ -179,3 +179,12 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# MyCSA - Local customer data
+logs/
+
+# MyCSA - Generated FAISS vector database
+vector_store/
+
+# MyCSA - Local backup files
+*.bak

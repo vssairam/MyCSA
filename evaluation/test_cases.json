@@ -1,0 +1,75 @@
+{
+  "description": "MyCSA Version 1.1 - RAG Retrieval Evaluation Dataset",
+  "test_cases": [
+    {
+    "id": "TC001",
+    "category": "shipping",
+    "query": "My package has not arrived and the tracking information has not changed.",
+    "expected_sections": [
+        {
+        "source": "shipping_policy.md",
+        "section": "Order Tracking"
+        }
+    ]
+    },
+    {
+      "id": "TC002",
+      "category": "refund",
+      "query": "I returned my order and want to know whether I am eligible for a refund.",
+      "expected_sections": [
+        {
+          "source": "refund_policy.md",
+          "section": "Refund Eligibility"
+        }
+      ]
+    },
+    {
+      "id": "TC003",
+      "category": "billing",
+      "query": "My card was charged twice for the same order.",
+      "expected_sections": [
+        {
+          "source": "billing_policy.md",
+          "section": "Duplicate Charges"
+        }
+      ]
+    },
+    {
+      "id": "TC004",
+      "category": "account",
+      "query": "I cannot sign in because I forgot my password.",
+      "expected_sections": [
+        {
+          "source": "account_and_login.md",
+          "section": "Password Reset"
+        }
+      ]
+    },
+    {
+      "id": "TC005",
+      "category": "product",
+      "query": "I received a different product from the one I ordered.",
+      "expected_sections": [
+        {
+          "source": "product_faq.md",
+          "section": "Wrong Product Delivered"
+        }
+      ]
+    },
+    {
+      "id": "TC006",
+      "category": "multi_policy",
+      "query": "My delivery arrived with an incorrect item, and I need my money back.",
+      "expected_sections": [
+        {
+          "source": "product_faq.md",
+          "section": "Wrong Product Delivered"
+        },
+        {
+          "source": "refund_policy.md",
+          "section": "Refund Eligibility"
+        }
+      ]
+    }
+  ]
+}
