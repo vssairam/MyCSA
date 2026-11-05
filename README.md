@@ -120,63 +120,63 @@ The MyCSA application is organized into separate modules for AI agents, knowledg
 
 ```text
 MyCSA/
-â”‚
-â”œâ”€â”€ agents/
-â”‚   â”œâ”€â”€ query_agent.py
-â”‚   â”œâ”€â”€ knowledge_agent.py
-â”‚   â”œâ”€â”€ resolution_agent.py
-â”‚   â””â”€â”€ log_agent.py
-â”‚
-â”œâ”€â”€ knowledge_base/
-â”‚   â”œâ”€â”€ shipping_policy.md
-â”‚   â”œâ”€â”€ refund_policy.md
-â”‚   â”œâ”€â”€ account_and_login.md
-â”‚   â”œâ”€â”€ product_faq.md
-â”‚   â””â”€â”€ billing_policy.md
-â”‚
-â”œâ”€â”€ logs/
-â”‚   â”œâ”€â”€ customer_tickets.csv
-â”‚   â”œâ”€â”€ idempotency_registry.json
-â”‚   â””â”€â”€ request_status_registry.json
-â”‚
-â”œâ”€â”€ vector_store/
-â”‚   â”œâ”€â”€ policies.index
-â”‚   â””â”€â”€ metadata.json
-â”‚
-â”œâ”€â”€ app.py
-â”œâ”€â”€ selector_workflow.py
-â”œâ”€â”€ multi_agent_workflow.py
-â”‚
-â”œâ”€â”€ build_vector_store.py
-â”œâ”€â”€ semantic_search.py
-â”œâ”€â”€ kb_search.py
-â”‚
-â”œâ”€â”€ idempotency_utils.py
-â”œâ”€â”€ idempotency_registry.py
-â”œâ”€â”€ request_status.py
-â”œâ”€â”€ request_status_registry.py
-â”‚
-â”œâ”€â”€ test_autogen.py
-â”œâ”€â”€ test_duplicate_logging.py
-â”œâ”€â”€ test_exactly_one_logging.py
-â”œâ”€â”€ test_idempotency_registry.py
-â”œâ”€â”€ test_knowledge_agent.py
-â”œâ”€â”€ test_log_agent.py
-â”œâ”€â”€ test_multi_agent_scenarios.py
-â”œâ”€â”€ test_query_agent.py
-â”œâ”€â”€ test_request_status_registry.py
-â”œâ”€â”€ test_resolution_agent.py
-â”œâ”€â”€ test_selector_termination.py
-â”œâ”€â”€ test_semantic_search.py
-â”‚
-â”œâ”€â”€ .env
-â”œâ”€â”€ .env.example
-â”œâ”€â”€ .gitignore
-â”œâ”€â”€ .gitattributes
-â”œâ”€â”€ README.md
-â”‚
-â”œâ”€â”€ venv/
-â””â”€â”€ __pycache__/
+|
++-- agents/
+|   +-- query_agent.py
+|   +-- knowledge_agent.py
+|   +-- resolution_agent.py
+|   +-- log_agent.py
+|
++-- knowledge_base/
+|   +-- shipping_policy.md
+|   +-- refund_policy.md
+|   +-- account_and_login.md
+|   +-- product_faq.md
+|   +-- billing_policy.md
+|
++-- logs/
+|   +-- customer_tickets.csv
+|   +-- idempotency_registry.json
+|   +-- request_status_registry.json
+|
++-- vector_store/
+|   +-- policies.index
+|   +-- metadata.json
+|
++-- app.py
++-- selector_workflow.py
++-- multi_agent_workflow.py
+|
++-- build_vector_store.py
++-- semantic_search.py
++-- kb_search.py
+|
++-- idempotency_utils.py
++-- idempotency_registry.py
++-- request_status.py
++-- request_status_registry.py
+|
++-- test_autogen.py
++-- test_duplicate_logging.py
++-- test_exactly_one_logging.py
++-- test_idempotency_registry.py
++-- test_knowledge_agent.py
++-- test_log_agent.py
++-- test_multi_agent_scenarios.py
++-- test_query_agent.py
++-- test_request_status_registry.py
++-- test_resolution_agent.py
++-- test_selector_termination.py
++-- test_semantic_search.py
+|
++-- .env
++-- .env.example
++-- .gitignore
++-- .gitattributes
++-- README.md
+|
++-- venv/
++-- __pycache__/
 ```
 
 *Note: The nested files shown under `agents/`, `knowledge_base/`, `logs/`, and `vector_store/` reflect the project components developed and used during implementation. The top-level files were verified against the project directory listing.*
