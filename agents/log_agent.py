@@ -1,5 +1,6 @@
 import csv
 import json
+import math
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +15,28 @@ LOG_FILE = LOG_DIRECTORY / "customer_tickets.csv"
 # Confidence threshold for escalation
 CONFIDENCE_THRESHOLD = 0.70
 
+def normalize_boolean(value):
+    """
+    Convert supported boolean representations into
+    Python boolean values.
+
+    Unknown values are treated as False.
+    """
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        return value.strip().lower() in (
+            "true",
+            "1",
+            "yes"
+        )
+
+    if isinstance(value, (int, float)):
+        return value == 1
+
+    return False
 
 def determine_escalation(
     urgency,
@@ -36,18 +59,25 @@ def determine_escalation(
     if str(sentiment).strip().lower() == "angry":
         reasons.append("Angry customer")
 
-    if not kb_found:
+    if not normalize_boolean(kb_found):
         reasons.append("No relevant knowledge base policy")
 
     try:
         confidence_value = float(confidence)
-    except (TypeError, ValueError):
+
+        if (
+            not math.isfinite(confidence_value)
+            or not 0.0 <= confidence_value <= 1.0
+        ):
+            confidence_value = 0.0
+
+    except (TypeError, ValueError, OverflowError):
         confidence_value = 0.0
 
     if confidence_value < CONFIDENCE_THRESHOLD:
         reasons.append("Low resolution confidence")
 
-    if requires_human_review:
+    if normalize_boolean(requires_human_review):
         reasons.append("Resolution Agent requested human review")
 
     # Additional sensitive complaint categories
@@ -57,6 +87,10 @@ def determine_escalation(
         "unauthorized payment",
         "unauthorised payment",
         "payment dispute",
+        "charged twice",
+        "double charged",
+        "duplicate charge",
+        "duplicate payment",
         "chargeback",
         "legal notice",
         "lawsuit"

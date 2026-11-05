@@ -1,27 +1,50 @@
-# MyCSA – Multi-Agent Customer Support Automation
+# MyCSA v1.2 – Multi-Agent Customer Support Automation
 
 ## 1. Project Overview
 
 **MyCSA (Multi-Agent Customer Support Automation)** is an AI-powered customer support application developed for a fictional e-commerce company called **The AI Demo Store**.
 
-The application uses multiple specialized AI agents to process customer complaints, retrieve relevant company policies, generate appropriate responses, and create customer support tickets.
+The application uses four specialized AI agents to classify customer complaints, retrieve relevant company policies, generate policy-grounded responses, and automatically create customer support tickets.
 
-MyCSA combines **Microsoft AutoGen, SelectorGroupChat, Retrieval-Augmented Generation (RAG), FAISS, OpenAI models, and Streamlit** to provide an automated customer support experience.
+MyCSA combines **Microsoft AutoGen, SelectorGroupChat, Retrieval-Augmented Generation (RAG), FAISS, OpenAI models, and Streamlit** to deliver an interactive multi-agent customer support experience.
 
-The application also includes request status tracking, idempotency checks, ticket escalation, and a customer support dashboard.
+Version 1.2 introduces improvements in workflow reliability, knowledge-base grounding, escalation handling, ticket logging integrity, and the Streamlit user interface.
 
 ### Key Features
 
-* Automated customer complaint classification.
-* Multi-agent collaboration using AutoGen SelectorGroupChat.
-* Semantic search across company policies using FAISS.
-* Policy-grounded customer support responses.
-* Automated customer support ticket creation.
-* Ticket escalation based on predefined rules.
-* Request status tracking.
-* Idempotency checks to identify previously processed request IDs.
-* Customer support dashboard using Streamlit.
-* Ticket history and analytics.
+* **Multi-Agent Automation:** Four specialized AutoGen agents collaborate to process customer complaints.
+* **Intelligent Complaint Classification:** Identifies complaint category, urgency, sentiment, and summary.
+* **FAISS-Based Knowledge Retrieval:** Retrieves relevant information from company policy documents.
+* **Policy-Grounded Responses:** Generates customer responses using retrieved knowledge-base information.
+* **Source Traceability:** Displays relevant knowledge-base sources to support response verification.
+* **Automated Ticket Creation:** Generates unique customer support ticket IDs.
+* **Intelligent Escalation:** Identifies complaints requiring human review based on confidence, knowledge availability, and predefined escalation rules.
+* **Duplicate Logging Prevention:** Validates workflow completion and prevents duplicate ticket creation during supported retry scenarios.
+* **Request Status Tracking:** Maintains PENDING, PROCESSING, COMPLETED, and FAILED states.
+* **Idempotency Handling:** Identifies previously processed request IDs to avoid unnecessary reprocessing.
+* **CSV Audit Logging:** Records ticket details, confidence scores, sources, escalation decisions, and escalation reasons.
+* **Three-Page Streamlit Interface:**
+
+  * Customer Support
+  * Ticket History
+  * Dashboard Analytics
+* **Ticket Search and Export:** Supports searching, filtering, and downloading ticket records.
+* **Dashboard Analytics:** Displays ticket metrics, complaint categories, urgency distribution, and daily trends.
+* **Automated Testing:** Includes component tests, workflow regression tests, escalation validation, and CSV integrity checks.
+
+### Version 1.2 Enhancements
+
+| Enhancement Area         | Description                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| Workflow Reliability     | Improved workflow termination and successful ticket logging validation          |
+| Knowledge Base Grounding | Improved policy-based responses and source traceability                         |
+| Escalation Logic         | Improved confidence validation and handling of sensitive complaints             |
+| CSV Logging              | Validated ticket IDs, timestamps, escalation consistency, and logging integrity |
+| Streamlit Navigation     | Introduced three independent application pages                                  |
+| Dashboard Analytics      | Preserved KPI metrics, category distribution, urgency charts, and daily trends  |
+| Testing                  | Added regression coverage and pytest configuration for asynchronous tests       |
+
+MyCSA v1.2 is intended as a functional demonstration of multi-agent AI automation rather than a production-hardened customer support platform.
 
 ---
 
@@ -157,6 +180,8 @@ MyCSA/
 ├── request_status_registry.py
 │
 ├── test_autogen.py
+├── test_csv_integrity.py
+├── test_escalation_rules.py
 ├── test_duplicate_logging.py
 ├── test_exactly_one_logging.py
 ├── test_idempotency_registry.py
@@ -173,6 +198,8 @@ MyCSA/
 ├── .env.example
 ├── .gitignore
 ├── .gitattributes
+├── pytest.ini
+├── requirements.txt
 ├── README.md
 │
 ├── venv/
@@ -334,16 +361,84 @@ Its responsibilities include:
 
 **Module:** `agents/log_agent.py`
 
-The Log Agent records the processed complaint using the `log_customer_ticket` tool.
+#### Intelligent Ticket Escalation — MyCSA v1.2
 
-Its responsibilities include:
+MyCSA v1.2 includes enhanced escalation handling to identify customer complaints that may require human intervention.
 
-* Creating a unique support ticket ID.
-* Saving ticket information to `logs/customer_tickets.csv`.
-* Applying predefined escalation rules.
-* Returning ticket creation results.
+The Log Agent evaluates structured information received from the preceding agents and applies predefined escalation rules.
 
-Ticket IDs use the format `CSA-XXXXXXXX`.
+**Escalation considerations include:**
+
+* **Confidence Validation:** Confidence values are checked for validity and expected range. Invalid or non-finite values are handled conservatively.
+* **Knowledge Base Availability:** Complaints without sufficient supporting knowledge-base information may require human review.
+* **Human Review Flags:** Explicit human-review indicators are normalized and considered during escalation.
+* **Sensitive Complaint Detection:** The escalation logic recognizes complaint patterns involving duplicate charges, double payments, and other configured sensitive issues.
+* **Escalation Reasons:** When escalation is triggered, the corresponding reasons are recorded for review.
+
+The implementation also normalizes boolean inputs to reduce inconsistent escalation decisions caused by different representations of true and false values.
+
+These improvements help make escalation decisions more consistent, explainable, and auditable.
+
+#### CSV Ticket Audit Logging — MyCSA v1.2
+
+MyCSA stores customer support ticket information in:
+
+`logs/customer_tickets.csv`
+
+Each ticket contains structured information that supports operational monitoring and audit review.
+
+**Ticket fields:**
+
+| Field                | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `ticket_id`          | Unique customer support ticket identifier        |
+| `timestamp`          | Ticket creation date and time                    |
+| `complaint`          | Original customer complaint                      |
+| `category`           | Classified complaint category                    |
+| `urgency`            | Identified urgency level                         |
+| `sentiment`          | Customer sentiment                               |
+| `summary`            | Concise complaint summary                        |
+| `resolution`         | Generated customer support response              |
+| `confidence`         | Resolution confidence score                      |
+| `sources`            | Knowledge-base references                        |
+| `kb_found`           | Indicates whether relevant knowledge was found   |
+| `escalated`          | Indicates whether the ticket requires escalation |
+| `escalation_reasons` | Reasons supporting the escalation decision       |
+
+**Data Integrity Validation**
+
+The CSV integrity validation checks include:
+
+* Presence of required ticket fields.
+* Unique ticket identifiers.
+* Valid ticket ID formatting.
+* Valid timestamps.
+* Consistency between escalation status and escalation reasons.
+* Detection of missing or duplicate records.
+
+**Validation Results**
+
+During Phase 4, the CSV integrity checks were executed against 79 existing ticket records.
+
+| Validation Metric          | Result |
+| -------------------------- | ------ |
+| Total records reviewed     | 79     |
+| Unique ticket IDs          | 79     |
+| Duplicate ticket IDs       | 0      |
+| Missing required values    | 0      |
+| Escalation inconsistencies | 0      |
+| Escalated tickets          | 29     |
+| Non-escalated tickets      | 50     |
+
+These results represent the dataset validated during Phase 4. The number of records may change as additional customer complaints are processed.
+
+**Data Privacy**
+
+Ticket logs and local request registries are operational data files and should not be committed to a public repository when they contain customer information.
+
+The application should generate or maintain these files locally during execution.
+
+---
 
 ### 5.6 SelectorGroupChat Orchestration
 
@@ -502,13 +597,70 @@ In the Streamlit interface:
 
 ### 6.9 Run the SelectorGroupChat Workflow Directly
 
-The SelectorGroupChat workflow can also be executed from the terminal:
+### Streamlit User Interface — MyCSA v1.2
 
-```powershell
-python selector_workflow.py
-```
+MyCSA v1.2 provides an interactive Streamlit application with three independent navigation pages accessible through the sidebar.
 
-This is useful for demonstrating agent execution and inspecting workflow output without using Streamlit.
+#### 1. Customer Support
+
+The Customer Support page provides the primary interface for submitting customer complaints.
+
+**Features:**
+
+* Enter and submit customer complaints.
+* Execute the four-agent AutoGen workflow.
+* Display AI-generated customer support responses.
+* Display unique support ticket IDs.
+* Show confidence scores and escalation status.
+* Display escalation reasons when applicable.
+* Provide knowledge-base source references for verification.
+
+**Workflow:**
+
+Customer Complaint → Query Agent → Knowledge Base Agent → Resolution Agent → Log Agent → Customer Response and Ticket Creation
+
+#### 2. Ticket History
+
+The Ticket History page provides access to previously processed customer support tickets stored in the local CSV file.
+
+**Features:**
+
+* Display existing customer support ticket records.
+* Search tickets by ticket ID or complaint.
+* Filter tickets using the available filtering controls.
+* Review ticket details and escalation information.
+* Export filtered ticket records to CSV.
+
+**Data Source:** `logs/customer_tickets.csv`
+
+#### 3. Dashboard Analytics
+
+The Dashboard Analytics page provides an overview of customer support operations using information recorded in the ticket history.
+
+**Features:**
+
+* Total ticket count.
+* Ticket escalation metrics.
+* Complaint category distribution.
+* Urgency distribution.
+* Daily ticket volume trends.
+* Daily ticket breakdown.
+
+The dashboard uses Pandas for data processing and Streamlit for visualization.
+
+#### Navigation
+
+Users can switch between the three pages using the sidebar navigation menu.
+
+| Navigation Option   | Purpose                                               |
+| ------------------- | ----------------------------------------------------- |
+| Customer Support    | Submit complaints and review AI-generated resolutions |
+| Ticket History      | Search, filter, review, and export ticket records     |
+| Dashboard Analytics | Monitor customer support metrics and trends           |
+
+Each page is displayed independently, improving usability and separating complaint processing from historical reporting and analytics.
+
+---
 
 ### 6.10 Verify Request Status
 
@@ -554,86 +706,214 @@ To stop the Streamlit server, return to the terminal running Streamlit and press
 
 ## 7. Testing and Validation
 
-MyCSA was validated through component-level tests, multi-agent workflow execution, and end-to-end Streamlit testing.
+MyCSA v1.2 was validated through component testing, multi-agent workflow regression testing, knowledge-base grounding checks, escalation validation, CSV integrity checks, and end-to-end Streamlit testing.
 
 ### 7.1 Component Testing
 
-The following components were tested during development.
+The following tests were completed during development.
 
-| Component               | Validation                   | Result       |
-| ----------------------- | ---------------------------- | ------------ |
-| FAISS Semantic Search   | Knowledge retrieval tests    | PASS – 11/11 |
-| Knowledge Base Agent    | Agent retrieval tests        | PASS – 6/6   |
-| Multi-Agent Workflow    | Workflow scenario tests      | PASS – 5/5   |
-| Idempotency Registry    | Registry functionality tests | PASS – 5/5   |
-| Request Status Registry | Status management tests      | PASS – 6/6   |
+| Component               | Validation                | Result                      |
+| ----------------------- | ------------------------- | --------------------------- |
+| FAISS Semantic Search   | Knowledge retrieval tests | PASS — 11/11                |
+| Knowledge Base Agent    | Agent retrieval tests     | PASS — 6/6                  |
+| Multi-Agent Workflow    | Scenario validation       | PASS — 5/5                  |
+| Idempotency Registry    | Registry functionality    | PASS — 5/5                  |
+| Request Status Registry | Status management         | PASS — 6/6                  |
+| Escalation Logic        | Escalation unit tests     | PASS — 13/13                |
+| CSV Integrity           | Ticket data validation    | PASS — 79 records, 0 issues |
 
-These results reflect the successful test executions recorded during development.
+These results reflect successful test executions during development. They are not a guarantee that every possible input or operating condition has been tested.
 
-### 7.2 SelectorGroupChat Workflow Validation
+### 7.2 Workflow Reliability Validation
 
-The SelectorGroupChat workflow was tested by submitting a customer complaint through `selector_workflow.py`.
+Phase 1 focused on improving the reliability of the four-agent workflow.
 
-The execution confirmed:
+The following areas were validated:
 
-* Successful request ID generation.
-* Request status transitions through PENDING, PROCESSING, and COMPLETED.
-* Execution of all four agents.
+* SelectorGroupChat termination behavior.
+* Exactly-one successful ticket logging.
+* Duplicate ticket prevention.
+* Workflow completion validation.
+* Multi-agent integration scenarios.
+
+| Validation                   | Result     |
+| ---------------------------- | ---------- |
+| Selector termination         | PASS — 5/5 |
+| Exactly-one logging          | PASS — 4/4 |
+| Duplicate logging prevention | PASS — 6/6 |
+| Multi-agent integration      | PASS — 5/5 |
+
+### 7.3 Knowledge Base Grounding and Source Traceability
+
+Phase 2 focused on ensuring that generated customer responses were supported by retrieved company policies.
+
+Five integration scenarios were validated:
+
+1. Shipping-related complaint.
+2. Refund-related complaint.
+3. Duplicate payment complaint.
+4. Account login issue.
+5. Unrelated flight-related question.
+
+The tests evaluated:
+
 * Retrieval of relevant company policies.
-* Generation of a customer support response.
-* Successful creation of a support ticket.
-* Exactly one successful ticket logging event.
-* Registration of the request ID and ticket ID in the idempotency registry.
+* Appropriate source references.
+* Policy-grounded responses.
+* Avoidance of unsupported policy claims.
+* Appropriate handling of questions outside the available knowledge base.
 
-### 7.3 Streamlit Integration Validation
+**Result: PASS — 5/5 integration scenarios.**
 
-The integrated Streamlit application was tested successfully.
+### 7.4 Escalation Logic Validation
 
-The following features were verified:
+Phase 3 introduced improvements to ticket escalation handling.
 
-| Feature                                | Result |
-| -------------------------------------- | ------ |
-| Customer complaint submission          | PASS   |
-| AI-generated customer support response | PASS   |
-| Support ticket ID display              | PASS   |
-| Existing ticket history                | PASS   |
-| Dashboard functionality                | PASS   |
-| Request status persistence             | PASS   |
+The validation covered:
 
-### 7.4 Verified Request Status Records
+* Boolean normalization for knowledge availability and human-review indicators.
+* Confidence-score validation.
+* Handling of non-finite confidence values.
+* Sensitive complaint detection.
+* Duplicate payment and double-charge complaint patterns.
+* Escalation reason consistency.
 
-The request status registry contained the following successfully completed requests:
+**Result: PASS — 13/13 escalation unit tests.**
 
-| Request ID       | Ticket ID    | Status    |
-| ---------------- | ------------ | --------- |
-| REQ-BCFBA604261E | CSA-66A1C79D | COMPLETED |
-| REQ-044A819CA9B8 | CSA-DEBEE789 | COMPLETED |
+A subsequent multi-agent regression run also passed its five scenarios.
 
-These records demonstrate that the application successfully persisted request statuses and associated ticket IDs.
+### 7.5 CSV Audit and Data Integrity Validation
 
-### 7.5 Idempotency Validation
+Phase 4 validated the customer support ticket CSV.
 
-The workflow checks whether a request ID has already been processed.
+The validation covered:
 
-When an existing request ID is submitted again, the workflow returns the associated ticket ID without executing the multi-agent workflow again.
+* Required fields.
+* Unique ticket identifiers.
+* Ticket ID formatting.
+* Timezone-aware timestamps.
+* Escalation status consistency.
+* Missing and duplicate records.
 
-This behavior was validated for sequential retries during development.
+| Metric                     | Result |
+| -------------------------- | ------ |
+| Records validated          | 79     |
+| Unique ticket IDs          | 79     |
+| Duplicate ticket IDs       | 0      |
+| Missing required values    | 0      |
+| Escalation inconsistencies | 0      |
+| Escalated tickets          | 29     |
+| Non-escalated tickets      | 50     |
 
-### 7.6 Testing Scope and Limitations
+**Result: PASS — 79 records validated with no detected integrity issues.**
 
-The successful tests demonstrate that the implemented application functions correctly for the tested scenarios.
+These figures represent the Phase 4 validation snapshot and may change as new tickets are created.
 
-However, the following capabilities have not been established by these results:
+### 7.6 Streamlit UI Validation
+
+Phase 5 introduced three independent navigation pages.
+
+| Feature                        | Result |
+| ------------------------------ | ------ |
+| Customer Support navigation    | PASS   |
+| Ticket History navigation      | PASS   |
+| Dashboard Analytics navigation | PASS   |
+| Customer complaint submission  | PASS   |
+| AI-generated response display  | PASS   |
+| Ticket ID display              | PASS   |
+| Escalation status display      | PASS   |
+| Knowledge-base source display  | PASS   |
+| Ticket history updates         | PASS   |
+| Dashboard analytics updates    | PASS   |
+| Ticket search and filtering    | PASS   |
+| CSV export                     | PASS   |
+
+The final end-to-end Streamlit test confirmed that a shipping-related complaint could be submitted, processed, logged, and reflected in the dashboard.
+
+### 7.7 Automated Testing with pytest
+
+MyCSA v1.2 includes pytest and pytest-asyncio for executing automated tests.
+
+The project contains a `pytest.ini` configuration file to support asynchronous test execution.
+
+**Run the multi-agent integration test:**
+
+```powershell
+python -m pytest -q test_multi_agent_scenarios.py
+```
+
+**Latest verified result:**
+
+```text
+1 passed in 49.91s
+```
+
+The pytest result represents one asynchronous test function. The function may execute multiple internal scenarios.
+
+**Run the escalation tests:**
+
+```powershell
+python test_escalation_rules.py
+
+**Final MyCSA v1.2 Regression Validation**
+
+| Validation | Final Result |
+|---|---|
+| Escalation unit tests | PASS — 13/13 |
+| CSV integrity validation | PASS — 90 tickets, 0 issues |
+| Multi-agent workflow regression | PASS — 1 pytest test in 55.50 seconds |
+
+The escalation and CSV integrity checks are standalone Python validation
+scripts. The multi-agent regression test is executed using pytest.
+
+All three final regression checks passed successfully.
+```
+
+**Run the CSV integrity validation:**
+
+```powershell
+python test_csv_integrity.py
+```
+
+**Run the complete pytest-discovered test suite:**
+
+```powershell
+python -m pytest -q
+```
+
+The complete suite command is provided for reproducibility; a successful full-suite result should only be reported after it has been executed and verified.
+
+### 7.8 Request Status and Idempotency Validation
+
+The application maintains the following request processing statuses:
+
+* PENDING
+* PROCESSING
+* COMPLETED
+* FAILED
+
+The workflow validates successful ticket creation before recording a request as completed.
+
+Sequential retries using an already-processed request ID return the previously associated ticket rather than creating another ticket.
+
+These behaviors were validated during development.
+
+### 7.9 Testing Scope and Limitations
+
+MyCSA v1.2 is intended as a functional multi-agent customer support demonstration.
+
+The completed tests do not establish:
 
 * Concurrent duplicate-request protection.
 * Distributed or multi-server processing.
-* High-volume load handling.
+* High-volume production load handling.
 * Production-grade security and monitoring.
 * Comprehensive recovery testing for every possible failure condition.
 
-MyCSA Version 1.0 is intended as a functional multi-agent customer support demonstration rather than a production-hardened service.
+The application should undergo additional security, performance, concurrency, and operational testing before being considered for production deployment.
 
 ---
+
 
 ## 8. Demonstration Scenarios
 
