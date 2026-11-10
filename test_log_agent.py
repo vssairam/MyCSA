@@ -77,8 +77,9 @@ def test_escalation_rules():
             confidence=scenario["confidence"],
             sources=scenario["sources"],
             kb_found=scenario["kb_found"],
-            requires_human_review=scenario["requires_human_review"]
-        )
+            requires_human_review=scenario["requires_human_review"],
+            retrieved_sources=scenario["sources"]
+            )
 
         print("Ticket ID:", result["ticket_id"])
         print("Logged:", result["logged"])

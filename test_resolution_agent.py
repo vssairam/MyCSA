@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 from agents.resolution_agent import create_resolution_agent
-from kb_search import search_kb
+from agents.knowledge_agent import search_company_knowledge
 
 
 async def main():
@@ -26,9 +26,13 @@ async def main():
         )
 
         # Step 2: Retrieve relevant company policies
+        search_result = json.loads(
+            search_company_knowledge(complaint)
+        )
+
         kb_results = [
             result
-            for result in search_kb(complaint, top_k=20)
+            for result in search_result.get("matches", [])
             if result["source"] == "shipping_policy.md"
         ]
 
@@ -41,7 +45,7 @@ async def main():
 
         policy_context = "\n\n".join(
             f"Source: {item['source']}\n"
-            f"Section: {item['heading']}\n"
+            f"Section: {item['section']}\n"
             f"Policy:\n{item['content']}"
             for item in kb_results
         )

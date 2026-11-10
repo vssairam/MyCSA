@@ -1,7 +1,7 @@
-﻿import asyncio
+import asyncio
 import csv
 
-from multi_agent_workflow import run_customer_support
+from selector_workflow import run_selector_customer_support
 from agents.log_agent import LOG_FILE
 
 
@@ -99,7 +99,7 @@ async def test_scenarios():
 
         try:
             # Run all four AutoGen agents
-            result = await run_customer_support(
+            result = await run_selector_customer_support(
                 scenario["complaint"]
             )
 

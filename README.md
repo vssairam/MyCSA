@@ -149,7 +149,6 @@ MyCSA/
 |
 +-- build_vector_store.py
 +-- semantic_search.py
-+-- kb_search.py
 |
 +-- idempotency_utils.py
 +-- idempotency_registry.py
@@ -190,7 +189,7 @@ MyCSA/
 | `multi_agent_workflow.py`    | Original RoundRobinGroupChat implementation retained for reference                        |
 | `build_vector_store.py`      | Builds the FAISS vector database from company policy documents                            |
 | `semantic_search.py`         | Performs semantic searches against the FAISS vector database                              |
-| `kb_search.py`               | Knowledge-base search functionality                                                       |
+| `agents/knowledge_agent.py` | FAISS-based semantic knowledge retrieval, policy-source tracking, and Knowledge Base Agent implementation |
 | `idempotency_utils.py`       | Generates unique request identifiers                                                      |
 | `idempotency_registry.py`    | Records processed request IDs and their associated ticket IDs                             |
 | `request_status.py`          | Defines request processing statuses                                                       |
