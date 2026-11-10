@@ -70,7 +70,11 @@ def extract_agent_execution_steps(result):
                 if getattr(item, "is_error", False):
                     steps[name]["errors"].append(f"{tool_name}: {raw}")
                     continue
-                if name == "Knowledge_Base_Agent" and tool_name == "search_company_knowledge":
+
+                if (
+                        name == "Knowledge_Base_Agent"
+                        and tool_name in ("search_company_knowledge", "search_with_grounding")
+                ):
                     parsed = parse_mapping(raw)
                     if (parsed is not None and isinstance(parsed.get("found"), bool)
                             and isinstance(parsed.get("sources"), list)
@@ -78,7 +82,10 @@ def extract_agent_execution_steps(result):
                         steps[name]["knowledge_result"] = parsed
                     else:
                         steps[name]["errors"].append("Invalid knowledge search result")
-                if name == "Log_Agent" and tool_name == "log_customer_ticket":
+                if (
+                    name == "Log_Agent"
+                    and tool_name in ("log_customer_ticket", "log_ticket_with_grounding")
+                ):
                     parsed = parse_mapping(raw)
                     if parsed is not None and as_bool(parsed.get("logged")) and parsed.get("ticket_id"):
                         steps[name]["ticket_result"] = parsed
@@ -160,6 +167,38 @@ def extract_workflow_results(result):
         output["escalated"] = as_bool(ticket.get("escalated"))
         reasons = ticket.get("escalation_reasons", [])
         output["escalation_reasons"] = reasons if isinstance(reasons, list) else ([str(reasons)] if reasons else [])
+
+        # Customer-response safety safeguard.
+        # Do not display an unsupported resolution when
+        # the ticket confirms that no relevant policy was found.
+        if output["logged"]:
+            no_policy_evidence = (
+                "No relevant knowledge base policy"
+                in output["escalation_reasons"]
+            )
+
+            if no_policy_evidence:
+                output["response"] = (
+                    "Thank you for contacting The AI Demo Store. "
+                    "We could not verify the relevant company policy "
+                    "for your request. "
+                    "Your support ticket has been escalated for human review."
+                )
+
+                output["confidence"] = 0.0
+                output["sources"] = []
+
+    # Do not present an unconfirmed workflow result as a resolution.
+    if not output["logged"]:
+        output["response"] = (
+            "Thank you for contacting The AI Demo Store. "
+            "We could not confirm that your support request was "
+            "successfully processed. Please contact our support team "
+            "for further assistance."
+        )
+        output["confidence"] = 0.0
+        output["sources"] = []
+
     return output
 
 
@@ -232,6 +271,12 @@ def render_execution_tracker(steps):
                 st.write("**Escalated:**", "Yes" if as_bool(ticket.get("escalated")) else "No")
                 for reason in ticket.get("escalation_reasons", []) or []:
                     st.write(f"• {reason}")
+            elif name == "Resolution_Agent":
+                st.info(
+                    "The Resolution Agent has completed its analysis. "
+                    "The customer-facing response is displayed separately "
+                    "after the workflow safety checks."
+                )
             elif details["messages"]:
                 for msg in details["messages"]:
                     data = parse_mapping(msg)

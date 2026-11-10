@@ -4,6 +4,8 @@ import math
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from pii_utils import mask_pii
+from grounding_validator import validate_grounding
 
 from autogen_agentchat.agents import AssistantAgent
 
@@ -120,12 +122,31 @@ def log_customer_ticket(
     confidence: float,
     sources: list[str],
     kb_found: bool,
-    requires_human_review: bool = False
+    requires_human_review: bool = False,
+    retrieved_sources: list[str] | None = None
 ) -> dict:
     """
     Save a customer support ticket to a CSV file.
     """
 
+    # Grounding validation checkpoint
+    # Trusted retrieval evidence is not yet connected.
+    # Until then, require human review.
+
+    # Grounding validation checkpoint
+    # Missing retrieval evidence requires human review.
+
+    if retrieved_sources is None:
+        requires_human_review = True
+
+    else:
+        grounding_result = validate_grounding(
+            retrieved_sources=retrieved_sources,
+            cited_sources=sources
+        )
+
+        if not grounding_result["valid"]:
+            requires_human_review = True
     LOG_DIRECTORY.mkdir(
         parents=True,
         exist_ok=True
@@ -147,12 +168,12 @@ def log_customer_ticket(
         "timestamp": datetime.now(
             timezone.utc
         ).isoformat(),
-        "complaint": complaint,
+        "complaint": mask_pii(complaint),
         "category": category,
         "urgency": urgency,
         "sentiment": sentiment,
-        "summary": summary,
-        "resolution": resolution,
+        "summary": mask_pii(summary),
+        "resolution": mask_pii(resolution),
         "confidence": confidence,
         "sources": json.dumps(sources),
         "kb_found": kb_found,
@@ -189,7 +210,7 @@ def log_customer_ticket(
     }
 
 
-def create_log_agent(model_client):
+def create_log_agent(model_client, grounding_state=None):
     """
     Create the AutoGen Log Agent.
 
@@ -199,10 +220,79 @@ def create_log_agent(model_client):
     Never include TICKET_LOGGED if logging fails.
     """
 
+    def log_ticket_with_grounding(
+        complaint: str,
+        category: str,
+        urgency: str,
+        sentiment: str,
+        summary: str,
+        resolution: str,
+        confidence: float,
+        sources: list[str],
+        kb_found: bool,
+        requires_human_review: bool = False
+    ) -> dict:
+        """
+        Log a ticket using trusted Knowledge Base retrieval evidence.
+        """
+
+        # Read sources from the shared Python object.
+        # Do not accept retrieved_sources from the AI agent.
+        trusted_sources = (
+            grounding_state.get_sources()
+            if grounding_state is not None
+            else None
+        )
+
+        # Determine whether knowledge was actually retrieved.
+        # Never trust the AI-generated kb_found value.
+        trusted_kb_found = bool(trusted_sources)
+
+        # Independently enforce human review when knowledge retrieval fails.
+        search_failed = (
+            grounding_state.has_search_failed()
+            if grounding_state is not None
+            else True
+        )
+
+        if search_failed:
+            requires_human_review = True
+
+            # Prevent unsupported AI-generated resolutions
+            # from being recorded as customer responses.
+            resolution = (
+                "Thank you for contacting The AI Demo Store. "
+                "We are currently unable to verify the relevant "
+                "company policy for your request. "
+                "Your request requires review by our support team."
+            )
+
+            # No policy evidence is available.
+            sources = []
+            confidence = 0.0
+
+        return log_customer_ticket(
+            complaint=complaint,
+            category=category,
+            urgency=urgency,
+            sentiment=sentiment,
+            summary=summary,
+            resolution=resolution,
+            confidence=confidence,
+            sources=sources,
+            kb_found=trusted_kb_found,
+            requires_human_review=requires_human_review,
+            retrieved_sources=trusted_sources
+        )    
+
     return AssistantAgent(
         name="Log_Agent",
         model_client=model_client,
-        tools=[log_customer_ticket],
+        tools=[
+            log_ticket_with_grounding
+            if grounding_state is not None
+            else log_customer_ticket
+        ],
         reflect_on_tool_use=True,
         system_message="""
 You are the Log Agent for The AI Demo Store.
@@ -217,7 +307,7 @@ You will receive:
 
 INSTRUCTIONS:
 
-1. Always call the log_customer_ticket tool.
+1. Always call the available ticket-logging tool.
 2. Use the actual information supplied by previous agents.
 3. Never invent complaint details.
 4. Never change the original customer complaint.

@@ -19,59 +19,14 @@ def search_company_knowledge(query: str) -> str:
     OpenAI embeddings and FAISS semantic similarity.
     """
 
-    category_files = {
-        "shipping": "shipping_policy.md",
-        "refund": "refund_policy.md",
-        "account": "account_and_login.md",
-        "product": "product_faq.md",
-        "billing": "billing_policy.md"
-    }
+    # Retrieve semantically relevant policy documents.
+    results = search_semantic_kb(
+        query,
+        top_k=RAG_TOP_K
+    )
 
-    category_keywords = {
-        "shipping": [
-            "shipping", "delivery", "delayed",
-            "late", "shipment", "tracking"
-        ],
-        "refund": [
-            "refund", "return", "cancellation"
-        ],
-        "account": [
-            "password", "login", "account",
-            "signin", "locked"
-        ],
-        "product": [
-            "damaged", "defective", "broken",
-            "wrong product", "replacement"
-        ],
-        "billing": [
-            "payment", "charged", "charge",
-            "duplicate", "invoice", "billing"
-        ]
-    }
-
-    query_lower = query.lower()
-
-    detected_categories = [
-        category
-        for category, keywords in category_keywords.items()
-        if any(keyword in query_lower for keyword in keywords)
-    ]
-
-    # Retrieve additional candidates before filtering.
-    results = search_semantic_kb(query, top_k=RAG_TOP_K)
-
-    # Prioritize category matches without excluding other
-    # semantically relevant policy documents.
-    # Preserve FAISS similarity ranking.
-    # Category-based filtering and ranking bonuses are disabled
-    # until retrieval evaluation demonstrates their benefit.
-
-    # FAISS already applies the minimum similarity threshold.
-    # Keep relevant results from different policy documents.
-    # Category prioritization was applied above.
-
+    # Return a structured response when no policy is found.
     if not results:
-
         return json.dumps({
             "found": False,
             "sources": [],
@@ -81,6 +36,7 @@ def search_company_knowledge(query: str) -> str:
 
     matches = []
 
+    # Limit the number of policy matches returned.
     for result in results[:RAG_MAX_MATCHES]:
 
         content = result["content"]
@@ -89,7 +45,6 @@ def search_company_knowledge(query: str) -> str:
         heading = "General Policy"
 
         for line in content.splitlines():
-
             if line.startswith("#"):
                 heading = line.lstrip("#").strip()
                 break
@@ -109,16 +64,55 @@ def search_company_knowledge(query: str) -> str:
         "matches": matches
     }, ensure_ascii=False)
 
-
-def create_knowledge_agent(model_client):
+def create_knowledge_agent(model_client, grounding_state=None):
     """
     Create the AutoGen Knowledge Base Agent.
     """
 
+    def search_with_grounding(query: str) -> str:
+        """
+        Search company policies and track retrieval status.
+        """
+
+        if grounding_state is not None:
+            grounding_state.set_sources([])
+            grounding_state.set_search_failed(True)
+
+        try:
+            result = search_company_knowledge(query)
+            data = json.loads(result)
+
+            # Validate the expected search result structure.
+            if (
+                not isinstance(data, dict)
+                or not isinstance(data.get("found"), bool)
+                or not isinstance(data.get("sources"), list)
+                or not isinstance(data.get("matches"), list)
+            ):
+                raise ValueError("Invalid knowledge search result")
+
+            if grounding_state is not None:
+                grounding_state.set_sources(data["sources"])
+                grounding_state.set_search_failed(False)
+
+            return result
+
+        except Exception:
+            # Fail closed: do not treat a failed search as valid evidence.
+            if grounding_state is not None:
+                grounding_state.set_sources([])
+                grounding_state.set_search_failed(True)
+
+            raise
+
     return AssistantAgent(
         name="Knowledge_Base_Agent",
         model_client=model_client,
-        tools=[search_company_knowledge],
+        tools=[
+            search_with_grounding
+            if grounding_state is not None
+            else search_company_knowledge
+        ],
         reflect_on_tool_use=True,
         system_message="""
 You are the Knowledge Base Agent for The AI Demo Store.

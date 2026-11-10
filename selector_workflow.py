@@ -1,6 +1,7 @@
 import asyncio
 import ast
 import os
+import json
 
 
 from dotenv import load_dotenv
@@ -25,7 +26,8 @@ from agents.query_agent import create_query_agent
 from agents.knowledge_agent import create_knowledge_agent
 from agents.resolution_agent import create_resolution_agent
 from agents.log_agent import create_log_agent
-
+from grounding_validator import validate_grounding
+from grounding_state import GroundingState
 
 def ticket_logged(messages):
     """
@@ -43,7 +45,10 @@ def ticket_logged(messages):
 
         for result in message.content:
 
-            if result.name != "log_customer_ticket":
+            if result.name not in (
+                "log_customer_ticket",
+                "log_ticket_with_grounding"
+            ):
                 continue
 
             if result.is_error:
@@ -81,7 +86,10 @@ def count_successful_ticket_logs(messages):
 
         for result in message.content:
 
-            if result.name != "log_customer_ticket":
+            if result.name not in (
+                "log_customer_ticket",
+                "log_ticket_with_grounding"
+            ):
                 continue
 
             if result.is_error:
@@ -117,7 +125,10 @@ def get_logged_ticket_id(messages):
 
         for result in message.content:
 
-            if result.name != "log_customer_ticket":
+            if result.name not in (
+                "log_customer_ticket",
+                "log_ticket_with_grounding"
+            ):
                 continue
 
             if result.is_error:
@@ -174,6 +185,185 @@ def select_next_agent(messages):
 
     return "Log_Agent"
 
+def knowledge_search_completed(messages):
+    """
+    Return True when the Knowledge Base Agent has completed
+    a valid knowledge search, regardless of whether relevant
+    policies were found.
+    """
+
+    for message in messages:
+
+        if message.source != "Knowledge_Base_Agent":
+            continue
+
+        if type(message).__name__ != "ToolCallExecutionEvent":
+            continue
+
+        for result in message.content:
+
+            if result.name not in (
+                "search_with_grounding",
+                "search_company_knowledge"
+            ):
+                continue
+
+            if result.is_error:
+                continue
+
+            try:
+                data = json.loads(result.content)
+
+                if not isinstance(data, dict):
+                    continue
+
+                if not isinstance(data.get("found"), bool):
+                    continue
+
+                if not isinstance(data.get("sources"), list):
+                    continue
+
+                if not isinstance(data.get("matches"), list):
+                    continue
+
+                return True
+
+            except (ValueError, TypeError):
+                continue
+
+    return False
+
+def count_knowledge_search_attempts(messages):
+    """
+    Count actual Knowledge Base search tool executions.
+
+    Both successful and failed tool executions count
+    toward the retry limit.
+    """
+
+    attempts = 0
+
+    for message in messages:
+
+        if message.source != "Knowledge_Base_Agent":
+            continue
+
+        if type(message).__name__ != "ToolCallExecutionEvent":
+            continue
+
+        for result in message.content:
+
+            if result.name in (
+                "search_with_grounding",
+                "search_company_knowledge"
+            ):
+                attempts += 1
+
+    return attempts
+
+def get_eligible_agents(messages):
+    """
+    Identify eligible agents based on completed workflow stages.
+
+    Used by AutoGen's candidate_func to restrict selection
+    to agents that satisfy workflow prerequisites.
+    """
+
+    # Never select another agent after successful ticket logging.
+    if ticket_logged(messages):
+        raise RuntimeError(
+            "Agent selection requested after successful "
+            "ticket logging. Workflow should have terminated."
+        )
+
+    agent_order = [
+        "Customer_Query_Agent",
+        "Knowledge_Base_Agent",
+        "Resolution_Agent",
+        "Log_Agent",
+    ]
+
+    completed_agents = set()
+
+    for message in messages:
+
+        if message.source not in agent_order:
+            continue
+
+        # Ignore intermediate tool execution events.
+        if type(message).__name__ in (
+            "ToolCallRequestEvent",
+            "ToolCallExecutionEvent",
+        ):
+            continue
+
+        completed_agents.add(message.source)
+
+    for agent_name in agent_order:
+
+        if agent_name not in completed_agents:
+
+            # Do not proceed to resolution until the
+            # Knowledge Base search has completed.
+            if agent_name == "Resolution_Agent":
+
+                if not knowledge_search_completed(messages):
+
+                    attempts = count_knowledge_search_attempts(messages)
+
+                    # Retry the Knowledge Base search once.
+                    if attempts < 2:
+                        return ["Knowledge_Base_Agent"]
+
+                    # Both attempts failed.
+                    # Continue only through the human-review path.
+                    return ["Resolution_Agent"]
+
+                return [agent_name]
+            
+            return [agent_name]
+        
+    # All four agents have responded.
+    # A successful ticket should already trigger termination.
+    if ticket_logged(messages):
+        raise RuntimeError(
+            "Agent selection requested after successful "
+            "ticket logging. Workflow should have terminated."
+        )
+
+    # If logging has not succeeded, allow the Log Agent
+    # another opportunity to complete the operation.
+    return ["Log_Agent"]
+
+def get_safe_customer_response(
+    resolution: str,
+    grounding_state: GroundingState
+) -> str:
+    """
+    Return a customer-safe response based on knowledge-search status.
+
+    A failed knowledge search must never produce an
+    unsupported customer-facing resolution.
+    """
+
+    if grounding_state.has_search_failed():
+        return (
+            "Thank you for contacting The AI Demo Store. "
+            "We are currently unable to verify the relevant "
+            "company policy for your request. "
+            "Your request requires review by our support team."
+        )
+
+    if not grounding_state.get_sources():
+        return (
+            "Thank you for contacting The AI Demo Store. "
+            "We could not identify a relevant company policy "
+            "for your request. "
+            "Our support team will review your case."
+        )
+
+    return resolution
+
 async def run_selector_customer_support(
     complaint: str,
     request_id: str = None
@@ -229,10 +419,22 @@ async def run_selector_customer_support(
 
         print(f"Request Status: {RequestStatus.PROCESSING.value}")
 
+        # Create independent grounding evidence for this request.
+        grounding_state = GroundingState()
+
         query_agent = create_query_agent(model_client)
-        knowledge_agent = create_knowledge_agent(model_client)
+
+        knowledge_agent = create_knowledge_agent(
+            model_client,
+            grounding_state=grounding_state
+        )
+
         resolution_agent = create_resolution_agent(model_client)
-        log_agent = create_log_agent(model_client)
+
+        log_agent = create_log_agent(
+            model_client,
+            grounding_state=grounding_state
+        )
 
         team = SelectorGroupChat(
             participants=[
@@ -242,8 +444,7 @@ async def run_selector_customer_support(
                 log_agent
             ],
             model_client=model_client,
-            selector_func=select_next_agent,
-            allow_repeated_speaker=False,
+            candidate_func=get_eligible_agents,
             selector_prompt="""
 You are the workflow coordinator for The AI Demo Store.
 
@@ -264,11 +465,14 @@ MANDATORY WORKFLOW:
 4. Log_Agent must create the customer ticket fourth.
 
 SELECTION RULES:
-- Never skip a required agent.
+- Select only from the currently eligible participants.
+- Never skip complaint classification.
+- Knowledge_Base_Agent must attempt policy retrieval before Resolution_Agent.
+- Knowledge_Base_Agent may retry once if its first search fails.
+- After two failed knowledge searches, proceed to Resolution_Agent for human-review handling.
 - Never select Log_Agent before Resolution_Agent.
-- Never select Resolution_Agent before Knowledge_Base_Agent.
-- Do not repeat an agent.
-- Once the Log_Agent has logged the ticket, stop.
+- Never repeat Customer_Query_Agent or Resolution_Agent.
+- Once Log_Agent has successfully logged the ticket, stop.
 
 Return only the exact agent name.
 """,
@@ -367,8 +571,22 @@ IMPORTANT:
         print(f"\nCustomer Complaint: {complaint}")
 
         for message in result.messages:
-            print(f"\n{message.source}:")
-            print(message.content)
+
+            if message.source == "Resolution_Agent":
+                print("\nResolution_Agent:")
+
+                # Display a safe response instead of the original
+                # resolution when knowledge evidence is unavailable.
+                safe_response = get_safe_customer_response(
+                    str(message.content),
+                    grounding_state
+                )
+
+                print(safe_response)
+
+            else:
+                print(f"\n{message.source}:")
+                print(message.content)
 
         return result
 
